@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy import select, delete, caste, cast
+from sqlalchemy import select, delete, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_201_CREATED
 
