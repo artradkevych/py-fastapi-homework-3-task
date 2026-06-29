@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, caste, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.status import HTTP_201_CREATED
 
@@ -51,10 +51,8 @@ async def transaction(
         )
 
 
-def _ensure_utc(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+def _utc(dt: datetime) -> datetime:
+    return cast(datetime, dt).replace(tzinfo=timezone.utc)
 
 
 @router.post(
@@ -110,7 +108,7 @@ async def activate_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired activation token."
         )
-    if _ensure_utc(token_obj.expires_at) < datetime.now(timezone.utc):
+    if _utc(token_obj.expires_at) < datetime.now(timezone.utc):
         async with transaction(db, "An error occurred during activation."):
             await db.delete(token_obj)
         raise HTTPException(
@@ -181,7 +179,7 @@ async def reset_password_complete(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid email or token."
         )
-    if _ensure_utc(token_obj.expires_at) < datetime.now(timezone.utc):
+    if _utc(token_obj.expires_at) < datetime.now(timezone.utc):
         async with transaction(
             db, "An error occurred while resetting the password."
         ):
