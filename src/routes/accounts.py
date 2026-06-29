@@ -51,6 +51,12 @@ async def transaction(
         )
 
 
+def _ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 @router.post(
     "/register/",
     response_model=UserRegistrationResponseSchema,
@@ -104,10 +110,7 @@ async def activate_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired activation token."
         )
-    expires_at = token_obj.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
+    if _ensure_utc(token_obj.expires_at) < datetime.now(timezone.utc):
         async with transaction(db, "An error occurred during activation."):
             await db.delete(token_obj)
         raise HTTPException(
@@ -178,10 +181,7 @@ async def reset_password_complete(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid email or token."
         )
-    expires_at = token_obj.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
+    if _ensure_utc(token_obj.expires_at) < datetime.now(timezone.utc):
         async with transaction(
             db, "An error occurred while resetting the password."
         ):
@@ -220,9 +220,7 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is not activated."
         )
-    access_token = jwt_manager.create_access_token(
-        {"user_id": user.id}
-    )
+    access_token = jwt_manager.create_access_token({"user_id": user.id})
     refresh_token = jwt_manager.create_refresh_token(
         {"user_id": user.id},
         expires_delta=timedelta(days=settings.LOGIN_TIME_DAYS)
@@ -232,15 +230,12 @@ async def login(
         days_valid=settings.LOGIN_TIME_DAYS,
         token=refresh_token
     )
-    async with transaction(
-        db, "An error occurred while processing the request."
-    ):
+    async with transaction(db, "An error occurred while processing the request."):
         db.add(token_obj)
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "user_id": user.id
     }
 
 
@@ -254,7 +249,7 @@ async def refresh_token(
     jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager)
 ):
     try:
-        jwt_manager.decode_refresh_token(data.refresh_token)
+        payload = jwt_manager.decode_refresh_token(data.refresh_token)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -270,6 +265,12 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token not found."
         )
+    token_user_id = payload.get("user_id")
+    if token_user_id is None or token_obj.user_id != token_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found."
+        )
     user = await db.scalar(
         select(UserModel).where(UserModel.id == token_obj.user_id)
     )
@@ -278,7 +279,5 @@ async def refresh_token(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found."
         )
-    access_token = jwt_manager.create_access_token(
-        {"user_id": user.id}
-    )
+    access_token = jwt_manager.create_access_token({"user_id": user.id})
     return {"access_token": access_token}
