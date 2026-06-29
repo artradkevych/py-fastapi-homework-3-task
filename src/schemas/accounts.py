@@ -11,6 +11,7 @@ class UserBaseSchema(BaseModel):
     def validate_email(cls, value: str) -> str:
         return accounts_validators.validate_email(value)
 
+
 class UserRegistrationRequestSchema(UserBaseSchema):
     password: str
 
