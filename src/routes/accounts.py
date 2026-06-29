@@ -52,7 +52,7 @@ async def transaction(
 
 
 def _utc(dt: datetime) -> datetime:
-    return cast(datetime, dt).replace(tzinfo=timezone.utc)
+    return dt.replace(tzinfo=timezone.utc)
 
 
 @router.post(
